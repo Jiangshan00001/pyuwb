@@ -728,13 +728,6 @@ class uwb_zrzn(UwbModbus):
         print('次基站' + client_id + '测距成功, dist:', dist)
         return dist_list2dict(dist, self.group_id)
 
-    def calc_crc(self, payload: bytes):
-        """
-        :param payload:不校验和的报文
-        :return: 返回2byte的校验和
-        """
-        return calc_crc(payload)
-
     def detect_com_port(self):
         """
         检测串口：

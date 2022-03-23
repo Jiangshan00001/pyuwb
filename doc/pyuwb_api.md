@@ -22,7 +22,6 @@
     * [measure\_read](#pyuwb.uwb_zrzn.measure_read)
     * [check\_anchor\_dist\_measure\_finish](#pyuwb.uwb_zrzn.check_anchor_dist_measure_finish)
     * [measure\_one\_anchor\_dist](#pyuwb.uwb_zrzn.measure_one_anchor_dist)
-    * [calc\_crc](#pyuwb.uwb_zrzn.calc_crc)
     * [detect\_com\_port](#pyuwb.uwb_zrzn.detect_com_port)
     * [set\_cache\_data\_to\_default](#pyuwb.uwb_zrzn.set_cache_data_to_default)
     * [set\_basic\_info](#pyuwb.uwb_zrzn.set_basic_info)
@@ -325,22 +324,6 @@ def measure_one_anchor_dist(client_id,
 
 - `client_id`: 当前要测量的次基站client_id       次基站的id：eg: 1-2-1
 - `all_measure_anchor_client_id`: 所有使用的次基站client_id ['1-2-1','1-2-2']
-
-<a id="pyuwb.uwb_zrzn.calc_crc"></a>
-
-#### calc\_crc
-
-```python
-def calc_crc(payload: bytes)
-```
-
-**Arguments**:
-
-- `payload`: 不校验和的报文
-
-**Returns**:
-
-返回2byte的校验和
 
 <a id="pyuwb.uwb_zrzn.detect_com_port"></a>
 
