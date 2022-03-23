@@ -8,10 +8,12 @@ pip install pyuwb
 
 
 # definition：
+```
 client_id: device sn，format:{group_id}-{type_id}-{client_no} a string.eg:1-2-4.
                 where: group_id: fixed 1.
 		               type_id:  1--key anchor(connect to computer). 2--normal anchor. 3 --tag
 				       client_no: client NO. start from 0.
+```
 
 # get distance:
 ```
