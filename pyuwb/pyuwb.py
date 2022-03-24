@@ -5,7 +5,7 @@ from numpy import short
 from .anchor_locate_algorithm1 import AnchorLocateAlgorithm1
 from .tag_locate_algorithm1 import TagLocateAlgorithm1
 from .uwb_modbus import UwbModbus
-from modbus_pkt import split_packet
+from .modbus_pkt import split_packet
 
 from .client_id_utils import client_id_get_no, client_id_get_type, pack_client_id, client_id_remove_group
 from .dist_list_dict_convert import dist_list2dict
