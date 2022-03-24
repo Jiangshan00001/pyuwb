@@ -13,7 +13,7 @@ upload:
 clean:
 	rm -rf build dist pyuwb.egg-info *.bak
 doc:
-	pydoc-markdown -I pyuwb -m pyuwb --render-toc > doc/pyuwb_api.md
+	pydoc-markdown -I pyuwb -m pyuwb -m uwb_modbus --render-toc > doc/pyuwb_api.md
 
 .PHONY: test
 test:

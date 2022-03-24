@@ -10,22 +10,33 @@
     * [set\_device](#pyuwb.uwb_zrzn.set_device)
     * [locate\_anchor](#pyuwb.uwb_zrzn.locate_anchor)
     * [set\_anchor\_location](#pyuwb.uwb_zrzn.set_anchor_location)
-    * [get\_distance](#pyuwb.uwb_zrzn.get_distance)
-    * [get\_jizhan\_and\_biaoqian\_info](#pyuwb.uwb_zrzn.get_jizhan_and_biaoqian_info)
-    * [anchor\_zidong\_ceju](#pyuwb.uwb_zrzn.anchor_zidong_ceju)
+    * [measure\_distance](#pyuwb.uwb_zrzn.measure_distance)
     * [locate\_loop](#pyuwb.uwb_zrzn.locate_loop)
-    * [biaoqian\_zidong\_ceju](#pyuwb.uwb_zrzn.biaoqian_zidong_ceju)
-    * [tag\_a\_process](#pyuwb.uwb_zrzn.tag_a_process)
-    * [decode\_measure\_payload](#pyuwb.uwb_zrzn.decode_measure_payload)
-    * [count\_for\_payload\_func](#pyuwb.uwb_zrzn.count_for_payload_func)
-    * [avg\_dist\_data](#pyuwb.uwb_zrzn.avg_dist_data)
-    * [tag\_dist\_cache\_to\_one](#pyuwb.uwb_zrzn.tag_dist_cache_to_one)
-    * [one\_tag\_dist\_got](#pyuwb.uwb_zrzn.one_tag_dist_got)
-    * [tag\_dist\_process](#pyuwb.uwb_zrzn.tag_dist_process)
-    * [data\_cali\_v2](#pyuwb.uwb_zrzn.data_cali_v2)
-    * [measure\_read](#pyuwb.uwb_zrzn.measure_read)
-    * [check\_anchor\_dist\_measure\_finish](#pyuwb.uwb_zrzn.check_anchor_dist_measure_finish)
-    * [measure\_one\_anchor\_dist](#pyuwb.uwb_zrzn.measure_one_anchor_dist)
+* [uwb\_modbus](#uwb_modbus)
+  * [UwbModbus](#uwb_modbus.UwbModbus)
+    * [detect\_com\_port](#uwb_modbus.UwbModbus.detect_com_port)
+    * [connect](#uwb_modbus.UwbModbus.connect)
+    * [check\_crc](#uwb_modbus.UwbModbus.check_crc)
+    * [read\_modbus\_h](#uwb_modbus.UwbModbus.read_modbus_h)
+    * [write\_modbus\_h](#uwb_modbus.UwbModbus.write_modbus_h)
+    * [set\_label\_h](#uwb_modbus.UwbModbus.set_label_h)
+    * [set\_buardrate\_h](#uwb_modbus.UwbModbus.set_buardrate_h)
+    * [set\_device\_measure\_mode\_h](#uwb_modbus.UwbModbus.set_device_measure_mode_h)
+    * [set\_device\_mode\_h](#uwb_modbus.UwbModbus.set_device_mode_h)
+    * [set\_device\_id\_h](#uwb_modbus.UwbModbus.set_device_id_h)
+    * [set\_comm\_channel\_and\_speed\_h](#uwb_modbus.UwbModbus.set_comm_channel_and_speed_h)
+    * [set\_kalman\_h](#uwb_modbus.UwbModbus.set_kalman_h)
+    * [set\_recv\_delay\_h](#uwb_modbus.UwbModbus.set_recv_delay_h)
+    * [set\_anchor\_enable\_h](#uwb_modbus.UwbModbus.set_anchor_enable_h)
+    * [start\_measure\_h](#uwb_modbus.UwbModbus.start_measure_h)
+    * [convert\_tag\_to\_anchor\_once\_h](#uwb_modbus.UwbModbus.convert_tag_to_anchor_once_h)
+    * [convert\_anchor\_to\_tag\_once\_h](#uwb_modbus.UwbModbus.convert_anchor_to_tag_once_h)
+    * [get\_dist\_of\_tag\_once\_inner\_h](#uwb_modbus.UwbModbus.get_dist_of_tag_once_inner_h)
+    * [set\_cache\_data\_to\_default](#uwb_modbus.UwbModbus.set_cache_data_to_default)
+    * [clear\_measure1\_reg](#uwb_modbus.UwbModbus.clear_measure1_reg)
+    * [set\_basic\_info\_h](#uwb_modbus.UwbModbus.set_basic_info_h)
+    * [get\_dist\_of\_tag\_once](#uwb_modbus.UwbModbus.get_dist_of_tag_once)
+    * [convert\_mean](#uwb_modbus.UwbModbus.convert_mean)
 
 <a id="pyuwb"></a>
 
@@ -173,12 +184,12 @@ def set_anchor_location(anchor_pos, using_master=0)
 - `anchor_pos`: [{client_id:'1-2-0', pos:{x:, y:, z:}} ]
 - `using_master`: False/True
 
-<a id="pyuwb.uwb_zrzn.get_distance"></a>
+<a id="pyuwb.uwb_zrzn.measure_distance"></a>
 
-#### get\_distance
+#### measure\_distance
 
 ```python
-def get_distance(client_id1, client_id2)
+def measure_distance(client_id1, client_id2)
 ```
 
 测量获取距离
@@ -191,32 +202,6 @@ def get_distance(client_id1, client_id2)
 **Returns**:
 
 两个设备间的距离，单位m
-
-<a id="pyuwb.uwb_zrzn.get_jizhan_and_biaoqian_info"></a>
-
-#### get\_jizhan\_and\_biaoqian\_info
-
-```python
-def get_jizhan_and_biaoqian_info()
-```
-
-**Returns**:
-
-[{client_id:, pos:{x:,y:,z:}}], [{client_id:, pos:{x:,y:,z:}}]
-
-<a id="pyuwb.uwb_zrzn.anchor_zidong_ceju"></a>
-
-#### anchor\_zidong\_ceju
-
-```python
-def anchor_zidong_ceju(anchor_client_list, measure_ready_cnt=40)
-```
-
-基站的测距：
-
-**Arguments**:
-
-- `anchor_client_list`: [ {client_id:'1-2-3', }]
 
 <a id="pyuwb.uwb_zrzn.locate_loop"></a>
 
@@ -234,168 +219,351 @@ def locate_loop(tag_no_list=None, wait_for_finish=0, timeout=10.0)
 - `wait_for_finish`: 
 - `timeout`: 
 
-<a id="pyuwb.uwb_zrzn.biaoqian_zidong_ceju"></a>
+<a id="uwb_modbus"></a>
 
-#### biaoqian\_zidong\_ceju
+# uwb\_modbus
 
-```python
-def biaoqian_zidong_ceju(tag_client_list, anchor_client_list=None)
-```
+<a id="uwb_modbus.UwbModbus"></a>
 
-**Arguments**:
-
-- `tag_client_list`: [{client_id:,}, ...]
-- `anchor_client_list`: [{client_id:,}, ...]
-
-<a id="pyuwb.uwb_zrzn.tag_a_process"></a>
-
-#### tag\_a\_process
+## UwbModbus Objects
 
 ```python
-def tag_a_process(tag_id, acce_x, acce_y, acce_z)
+class UwbModbus()
 ```
 
-向tag_a_xyz中添加 标签20 21 的加速度
+<a id="uwb_modbus.UwbModbus.detect_com_port"></a>
 
-<a id="pyuwb.uwb_zrzn.decode_measure_payload"></a>
-
-#### decode\_measure\_payload
+#### detect\_com\_port
 
 ```python
-def decode_measure_payload(payload63: bytes, pkt_has_height=1)
+def detect_com_port()
 ```
 
-解码报文
-
-**Arguments**:
-
-- `payload63`: 
-- `pkt_has_height`: 
-
-<a id="pyuwb.uwb_zrzn.count_for_payload_func"></a>
-
-#### count\_for\_payload\_func
-
-```python
-def count_for_payload_func(tag_id, dista, status, acce_x, acce_y, acce_z)
-```
-
-测试 运行速度
-
-
-<a id="pyuwb.uwb_zrzn.avg_dist_data"></a>
-
-#### avg\_dist\_data
-
-```python
-def avg_dist_data(data_list, last_data)
-```
-
-距离数据的平均滤波。避免跳动太大
-
-**Arguments**:
-
-- `data_list`: 
-- `last_data`: 
-
-<a id="pyuwb.uwb_zrzn.tag_dist_cache_to_one"></a>
-
-#### tag\_dist\_cache\_to\_one
-
-```python
-def tag_dist_cache_to_one(tag_id)
-```
-
-标签的距离，采用多次测量取平均值的方式
-
-
-<a id="pyuwb.uwb_zrzn.one_tag_dist_got"></a>
-
-#### one\_tag\_dist\_got
-
-```python
-def one_tag_dist_got(tag_id)
-```
-
-每次接收到1次设备发来的标签距离信息，则会调用此函数
-
-**Arguments**:
-
-- `tag_id`: 
-
-<a id="pyuwb.uwb_zrzn.tag_dist_process"></a>
-
-#### tag\_dist\_process
-
-```python
-def tag_dist_process(tag_id, dista, status)
-```
-
-处理距离
-
-**Arguments**:
-
-- `dista`: 
-- `status`: 
-- `tag_id`: 
-
-<a id="pyuwb.uwb_zrzn.data_cali_v2"></a>
-
-#### data\_cali\_v2
-
-```python
-def data_cali_v2(client_id, anchor_id_n, curr_val, cali_param)
-```
-
-
-
-<a id="pyuwb.uwb_zrzn.measure_read"></a>
-
-#### measure\_read
-
-```python
-def measure_read(pkt_has_height=1)
-```
-
-读取串口数据并解码，用于主基站主动发数据的模式
-
-**Arguments**:
-
-- `pkt_has_height`: 
+检测串口：
 
 **Returns**:
 
-此次处理的报文数，此次处理的字节数
+'COM3'  对应uwb的主基站串口
+没有相应设备时，为None
 
-<a id="pyuwb.uwb_zrzn.check_anchor_dist_measure_finish"></a>
+<a id="uwb_modbus.UwbModbus.connect"></a>
 
-#### check\_anchor\_dist\_measure\_finish
-
-```python
-def check_anchor_dist_measure_finish()
-```
-
-读取串口测距报文，处理后，查看哪些测距已经完成
-
-**Returns**:
-
-is_finish, 100
-
-<a id="pyuwb.uwb_zrzn.measure_one_anchor_dist"></a>
-
-#### measure\_one\_anchor\_dist
+#### connect
 
 ```python
-def measure_one_anchor_dist(client_id,
-                            measure_ready_cnt=40,
-                            remove_error_device=True)
+def connect(com_port=None)
 ```
 
-测量某个基站到其他基站的距离
+连接串口
+
+<a id="uwb_modbus.UwbModbus.check_crc"></a>
+
+#### check\_crc
+
+```python
+def check_crc(payload: bytes)
+```
 
 **Arguments**:
 
-- `client_id`: 当前要测量的次基站client_id       次基站的id：eg: 1-2-1
-- `measure_ready_cnt`: 测量次数
-- `remove_error_device`: False/True 如果测距失败，则从可用列表中移除此设备
+- `payload`: 带校验和的报文，最后2byte的校验和会被用于比较
+
+**Returns**:
+
+正确返回True, 否则返回false
+
+<a id="uwb_modbus.UwbModbus.read_modbus_h"></a>
+
+#### read\_modbus\_h
+
+```python
+def read_modbus_h(reg_start_addr, reg_count, addr=1)
+```
+
+指定id、地址、寄存器个数
+01 --id号： id
+03-- 读
+00 05 --起始寄存器  add2
+00 6A -- 寄存器个数  reg_count
+C5 E5 --校验位
+
+01 --id号： id
+03 -- 读
+02 -- 字节数
+0007 -- 数据
+f986
+寄存器是16bit的。低位在前，高位在后。
+
+<a id="uwb_modbus.UwbModbus.write_modbus_h"></a>
+
+#### write\_modbus\_h
+
+```python
+def write_modbus_h(add2, reg_count, dat, id=1, just_gen_pkt=0)
+```
+
+例子：开始测距 01 10 00 28 00 01 02 00 04 A1 BB
+
+01 id号  id
+    10 写
+    00 00 起始寄存器  add2
+    00 6A 寄存器个数  reg_count
+    D4   字节数      len(dat)
+    。。。。 D4个字节  dat
+    0B 60 --校验和
+
+    返回值
+    00
+    10
+    006b   107
+    0001   1
+    71c4
+
+    01  id号  id
+    10  写
+    006b  起始寄存器
+    0001  寄存器个数
+    7015  校验位
+
+**Arguments**:
+
+- `id`: 
+- `add2`: 
+- `reg_count`: 
+- `dat`: 
+
+<a id="uwb_modbus.UwbModbus.set_label_h"></a>
+
+#### set\_label\_h
+
+```python
+def set_label_h(label_no_list=(0, ))
+```
+
+如果label_no_list=[1] 则发送数据为 00 01
+
+如果label_no_list=[1,2] 则发送数据为 02 01
+如果label_no_list=[1,2,3] 则发送数据为 02 01 00 03
+
+**Arguments**:
+
+- `label_no_list`: 
+
+<a id="uwb_modbus.UwbModbus.set_buardrate_h"></a>
+
+#### set\_buardrate\_h
+
+```python
+def set_buardrate_h(rate_no=7)
+```
+
+设备串口通讯波特率
+
+**Arguments**:
+
+- `rate_no`: 0：4800  1：9600 2：14400 3：19200 4：38400 5：56000 6：57600 7：115200  8：128000 9：256000
+
+<a id="uwb_modbus.UwbModbus.set_device_measure_mode_h"></a>
+
+#### set\_device\_measure\_mode\_h
+
+```python
+def set_device_measure_mode_h(cmode=1, dmode=0)
+```
+
+**Arguments**:
+
+- `cmode`: 测量模式   0：DS-TWR 1：高性能TWR。
+- `dmode`: 测距模式 1:二维模式 2：三维模式"
+
+<a id="uwb_modbus.UwbModbus.set_device_mode_h"></a>
+
+#### set\_device\_mode\_h
+
+```python
+def set_device_mode_h(mode=2)
+```
+
+**Arguments**:
+
+- `mode`: 设备模式 0：标签 1：次基站 2：主基站
+
+<a id="uwb_modbus.UwbModbus.set_device_id_h"></a>
+
+#### set\_device\_id\_h
+
+```python
+def set_device_id_h(device_id=0)
+```
+
+设备ID，高8位为次基站ID，范围0~6 ，
+
+低8位为标签ID ，0~99
+（程序内部 标签ID为0~247  次基站ID为248~254  主基站ID为255）
+
+**Arguments**:
+
+- `device_id`: 
+
+<a id="uwb_modbus.UwbModbus.set_comm_channel_and_speed_h"></a>
+
+#### set\_comm\_channel\_and\_speed\_h
+
+```python
+def set_comm_channel_and_speed_h(channel=1, speed=2)
+```
+
+byte0-空中信道，byte1-空中传输速率
+
+**Arguments**:
+
+- `channel`: 
+- `speed`: 
+
+<a id="uwb_modbus.UwbModbus.set_kalman_h"></a>
+
+#### set\_kalman\_h
+
+```python
+def set_kalman_h(param_q=3, param_r=0x0a)
+```
+
+**Arguments**:
+
+- `param_q`: 
+- `param_r`: 
+
+<a id="uwb_modbus.UwbModbus.set_recv_delay_h"></a>
+
+#### set\_recv\_delay\_h
+
+```python
+def set_recv_delay_h(delay=0x80CF, just_gen_pkt=0)
+```
+
+**Arguments**:
+
+- `delay`: 
+
+<a id="uwb_modbus.UwbModbus.set_anchor_enable_h"></a>
+
+#### set\_anchor\_enable\_h
+
+```python
+def set_anchor_enable_h(jizhan_index=0, enabled=1)
+```
+
+基站固定的有7个。编号为0-6. 对应 BCDEFGH
+
+**Arguments**:
+
+- `jizhan_index`: 基站编号 0-6
+- `enabled`: 0--disable. 1--enable it
+
+<a id="uwb_modbus.UwbModbus.start_measure_h"></a>
+
+#### start\_measure\_h
+
+```python
+def start_measure_h(mode=6)
+```
+
+**Arguments**:
+
+- `mode`: 0x04：持续测量，主动发送，不写入寄存器
+0x03：单次测量，主动发送，写入寄存器
+0x02：持续测量，不发送，写入寄存器
+0x01：单次测量，不发送，写入寄存器
+0x00: 停止测量"
+
+<a id="uwb_modbus.UwbModbus.convert_tag_to_anchor_once_h"></a>
+
+#### convert\_tag\_to\_anchor\_once\_h
+
+```python
+def convert_tag_to_anchor_once_h(client_id)
+```
+
+将标签 转化为 次基站
+
+<a id="uwb_modbus.UwbModbus.convert_anchor_to_tag_once_h"></a>
+
+#### convert\_anchor\_to\_tag\_once\_h
+
+```python
+def convert_anchor_to_tag_once_h(client_id)
+```
+
+将次基站 转化为 标签0
+
+<a id="uwb_modbus.UwbModbus.get_dist_of_tag_once_inner_h"></a>
+
+#### get\_dist\_of\_tag\_once\_inner\_h
+
+```python
+def get_dist_of_tag_once_inner_h()
+```
+
+获取某个标签的距离:
+测量3次，取平均值
+
+<a id="uwb_modbus.UwbModbus.set_cache_data_to_default"></a>
+
+#### set\_cache\_data\_to\_default
+
+```python
+def set_cache_data_to_default()
+```
+
+标签20 21 到各次基站的距离
+
+<a id="uwb_modbus.UwbModbus.clear_measure1_reg"></a>
+
+#### clear\_measure1\_reg
+
+```python
+def clear_measure1_reg()
+```
+
+清除寄存器0x2f->0x36 8个寄存器
+
+
+<a id="uwb_modbus.UwbModbus.set_basic_info_h"></a>
+
+#### set\_basic\_info\_h
+
+```python
+def set_basic_info_h(tag_no_list, except_anchor_list=None)
+```
+
+设置测距的基本信息。会通过bulk模式发送
+
+**Arguments**:
+
+- `tag_no_list`: [20,21,22,23,24] tag_no_list that will be used
+- `except_anchor_list`: anchor that will be excluded. 默认的是空。
+
+<a id="uwb_modbus.UwbModbus.get_dist_of_tag_once"></a>
+
+#### get\_dist\_of\_tag\_once
+
+```python
+def get_dist_of_tag_once(loop_mean_cnt=20)
+```
+
+获取标签距离，默认平均20次
+
+<a id="uwb_modbus.UwbModbus.convert_mean"></a>
+
+#### convert\_mean
+
+```python
+def convert_mean(dist_list)
+```
+
+求均值函数
+
+**Arguments**:
+
+- `dist_list`: 
 
