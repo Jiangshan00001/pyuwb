@@ -2,7 +2,11 @@
 
 * [pyuwb](#pyuwb)
   * [uwb\_zrzn](#pyuwb.uwb_zrzn)
+    * [set\_pos\_callback](#pyuwb.uwb_zrzn.set_pos_callback)
     * [detect\_device](#pyuwb.uwb_zrzn.detect_device)
+    * [device\_pos\_list](#pyuwb.uwb_zrzn.device_pos_list)
+    * [tag\_no\_list](#pyuwb.uwb_zrzn.tag_no_list)
+    * [anchor\_no\_list](#pyuwb.uwb_zrzn.anchor_no_list)
     * [set\_device](#pyuwb.uwb_zrzn.set_device)
     * [locate\_anchor](#pyuwb.uwb_zrzn.locate_anchor)
     * [set\_anchor\_location](#pyuwb.uwb_zrzn.set_anchor_location)
@@ -22,13 +26,6 @@
     * [measure\_read](#pyuwb.uwb_zrzn.measure_read)
     * [check\_anchor\_dist\_measure\_finish](#pyuwb.uwb_zrzn.check_anchor_dist_measure_finish)
     * [measure\_one\_anchor\_dist](#pyuwb.uwb_zrzn.measure_one_anchor_dist)
-    * [detect\_com\_port](#pyuwb.uwb_zrzn.detect_com_port)
-    * [set\_cache\_data\_to\_default](#pyuwb.uwb_zrzn.set_cache_data_to_default)
-    * [set\_basic\_info](#pyuwb.uwb_zrzn.set_basic_info)
-    * [clear\_measure1\_reg](#pyuwb.uwb_zrzn.clear_measure1_reg)
-    * [get\_dist\_of\_biaoqian\_once](#pyuwb.uwb_zrzn.get_dist_of_biaoqian_once)
-    * [convert\_mean](#pyuwb.uwb_zrzn.convert_mean)
-    * [get\_pos\_of\_biaoqian\_once](#pyuwb.uwb_zrzn.get_pos_of_biaoqian_once)
 
 <a id="pyuwb"></a>
 
@@ -42,6 +39,20 @@
 class uwb_zrzn(UwbModbus)
 ```
 
+<a id="pyuwb.uwb_zrzn.set_pos_callback"></a>
+
+#### set\_pos\_callback
+
+```python
+def set_pos_callback(callback_func)
+```
+
+set the callback function when dist and pos is successfully measured
+
+**Arguments**:
+
+- `callback_func`: def function_to_call(tag_id:int, dist:dict, pos:dict) pos:{x:1,y:2,z:3}
+
 <a id="pyuwb.uwb_zrzn.detect_device"></a>
 
 #### detect\_device
@@ -50,12 +61,60 @@ class uwb_zrzn(UwbModbus)
 def detect_device(tag_no_list=None, anchor_no_list=None)
 ```
 
+detect if device exist
+
 如果是空列表，则基站会检测：0,1,2,3,4,5,6,7存在不存在，标签会检测：1-10存在不存在
 
 **Arguments**:
 
-- `tag_no_list`: 如果是空标签会检测：1-10存在不存在
-- `anchor_no_list`: 
+- `tag_no_list`: tag_no will be detected. will detect 1-10 tag is exist or not if None or empty.  如果是空标签会检测：1-10号标签是否存在
+- `anchor_no_list`: anchor_no will be detected. will detect 0-7 anchor is exist or not if None or empty. 如果为空，则会检测0-7号基站是否存在
+
+**Returns**:
+
+exist tag_no_list, exist anchor_no_list
+
+<a id="pyuwb.uwb_zrzn.device_pos_list"></a>
+
+#### device\_pos\_list
+
+```python
+def device_pos_list()
+```
+
+get all device current pos
+
+**Returns**:
+
+[{'client_id':'1-2-3', pos:{x:,y:,z:}},...]
+
+<a id="pyuwb.uwb_zrzn.tag_no_list"></a>
+
+#### tag\_no\_list
+
+```python
+def tag_no_list()
+```
+
+get current tag no list
+
+**Returns**:
+
+[1,2,3,...]
+
+<a id="pyuwb.uwb_zrzn.anchor_no_list"></a>
+
+#### anchor\_no\_list
+
+```python
+def anchor_no_list()
+```
+
+get current anchor no list
+
+**Returns**:
+
+[0,1,2,3,...]
 
 <a id="pyuwb.uwb_zrzn.set_device"></a>
 
@@ -65,15 +124,29 @@ def detect_device(tag_no_list=None, anchor_no_list=None)
 def set_device(tag_no_list, anchor_no_list, using_master=0)
 ```
 
+set device to use.
+
+this function will auto called when  you call detect_device.
 如果不需要检测设备，直接指定设备列表也可以 (tag_no_list：标签列表，anchor_no_list：次基站列表，using_master：是否使用主基站测距【1代表使用，0代表不使用】)
+暂不支持通过master进行定位
+
+**Arguments**:
+
+- `tag_no_list`: tag no in the system. eg:[1,2,3,...]
+- `anchor_no_list`: anchor no in the system eg: [0,1,2,3]
+- `using_master`: 0
+
+**Returns**:
+
+None
 
 <a id="pyuwb.uwb_zrzn.locate_anchor"></a>
 
 #### locate\_anchor
 
 ```python
-def locate_anchor(height_list=[0.5, 1.1, 0.5, 1.1],
-                  direction_point=['N', 'S', 'E'],
+def locate_anchor(height_list=(0.5, 1.1, 0.5, 1.1),
+                  direction_point=('N', 'S', 'E'),
                   measure_ready_cnt=40)
 ```
 
@@ -323,91 +396,6 @@ def measure_one_anchor_dist(client_id,
 **Arguments**:
 
 - `client_id`: 当前要测量的次基站client_id       次基站的id：eg: 1-2-1
-- `all_measure_anchor_client_id`: 所有使用的次基站client_id ['1-2-1','1-2-2']
-
-<a id="pyuwb.uwb_zrzn.detect_com_port"></a>
-
-#### detect\_com\_port
-
-```python
-def detect_com_port()
-```
-
-检测串口：
-
-**Returns**:
-
-'COM3'  对应uwb的主基站串口
-没有相应设备时，为None
-
-<a id="pyuwb.uwb_zrzn.set_cache_data_to_default"></a>
-
-#### set\_cache\_data\_to\_default
-
-```python
-def set_cache_data_to_default()
-```
-
-标签20 21 到各次基站的距离
-
-<a id="pyuwb.uwb_zrzn.set_basic_info"></a>
-
-#### set\_basic\_info
-
-```python
-def set_basic_info(label_list, except_jizhan_list=None)
-```
-
-设置测距的基本信息。会通过bulk模式发送
-
-**Arguments**:
-
-- `label_list`: [20,21,22,23,24]
-- `except_jizhan_list`: 默认的是6各基站:0 1,2,3,4,5.对应基站：1-2-0,1-2-5.
-
-<a id="pyuwb.uwb_zrzn.clear_measure1_reg"></a>
-
-#### clear\_measure1\_reg
-
-```python
-def clear_measure1_reg()
-```
-
-清除寄存器0x2f->0x36 8个寄存器
-
-
-<a id="pyuwb.uwb_zrzn.get_dist_of_biaoqian_once"></a>
-
-#### get\_dist\_of\_biaoqian\_once
-
-```python
-def get_dist_of_biaoqian_once()
-```
-
-获取某个标签的距离:
-测量3次，取平均值
-
-<a id="pyuwb.uwb_zrzn.convert_mean"></a>
-
-#### convert\_mean
-
-```python
-def convert_mean(dist_list)
-```
-
-求均值函数
-
-**Arguments**:
-
-- `dist_list`: 
-
-<a id="pyuwb.uwb_zrzn.get_pos_of_biaoqian_once"></a>
-
-#### get\_pos\_of\_biaoqian\_once
-
-```python
-def get_pos_of_biaoqian_once(loop_mean_cnt=20)
-```
-
-获取标签距离，默认平均20次
+- `measure_ready_cnt`: 测量次数
+- `remove_error_device`: False/True 如果测距失败，则从可用列表中移除此设备
 
