@@ -6,6 +6,10 @@ python sdk for dw1000 uwb locating library.
 pip install pyuwb
 ```
 
+pyuwb-qt-demo:
+
+![avatar](https://github.com/Jiangshan00001/pyuwb/raw/main/doc/snap_shot1.png)
+
 
 # definition：
 ```
