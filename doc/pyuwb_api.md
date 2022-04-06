@@ -23,6 +23,7 @@
     * [set\_buardrate\_h](#uwb_modbus.UwbModbus.set_buardrate_h)
     * [set\_device\_measure\_mode\_h](#uwb_modbus.UwbModbus.set_device_measure_mode_h)
     * [set\_device\_mode\_h](#uwb_modbus.UwbModbus.set_device_mode_h)
+    * [set\_modbus\_id\_h](#uwb_modbus.UwbModbus.set_modbus_id_h)
     * [set\_device\_id\_h](#uwb_modbus.UwbModbus.set_device_id_h)
     * [set\_comm\_channel\_and\_speed\_h](#uwb_modbus.UwbModbus.set_comm_channel_and_speed_h)
     * [set\_kalman\_h](#uwb_modbus.UwbModbus.set_kalman_h)
@@ -280,19 +281,15 @@ def check_crc(payload: bytes)
 def read_modbus_h(reg_start_addr, reg_count, addr=1)
 ```
 
-指定id、地址、寄存器个数
-01 --id号： id
-03-- 读
-00 05 --起始寄存器  add2
-00 6A -- 寄存器个数  reg_count
-C5 E5 --校验位
+**Arguments**:
 
-01 --id号： id
-03 -- 读
-02 -- 字节数
-0007 -- 数据
-f986
-寄存器是16bit的。低位在前，高位在后。
+- `reg_start_addr`: 
+- `reg_count`: 
+- `addr`: 
+
+**Returns**:
+
+is_ok, ilist, bytes_data
 
 <a id="uwb_modbus.UwbModbus.write_modbus_h"></a>
 
@@ -386,7 +383,19 @@ def set_device_mode_h(mode=2)
 
 **Arguments**:
 
-- `mode`: 设备模式 0：标签 1：次基站 2：主基站
+- `mode`: 设备模式 0：tag 1：anchor 2：anchorz
+
+<a id="uwb_modbus.UwbModbus.set_modbus_id_h"></a>
+
+#### set\_modbus\_id\_h
+
+```python
+def set_modbus_id_h(mid)
+```
+
+**Arguments**:
+
+- `mid`: modbus_id/addr to set.
 
 <a id="uwb_modbus.UwbModbus.set_device_id_h"></a>
 

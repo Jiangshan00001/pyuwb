@@ -15,8 +15,8 @@ pyuwb-qt-demo:
 ```
 client_id: device sn，format:{group_id}-{type_id}-{client_no} a string.eg:1-2-4.
                 where: group_id: fixed 1.
-		               type_id:  1--key anchor(connect to computer). 2--normal anchor. 3 --tag
-				       client_no: client NO. start from 0.
+		     type_id:  2--anchorz(connect to computer). 1--normal anchor. 0 --tag
+		client_no: client NO. start from 0.
 ```
 
 
@@ -49,7 +49,7 @@ h.detect_device()
 
 ```
 # get distance of two device using the device client_id
-dist_meter = h.get_distance('1-3-1', '1-2-0')
+dist_meter = h.get_distance('1-0-1', '1-1-0')
 ```
 
 ## set anchor pos
@@ -65,10 +65,10 @@ print(anchor_pos_list)
 ### or set anchor pos directly:
 ```
 # set anchor position.  you could use this instead of locate_anchor() if you know the anchor exact pos.
-anchor_pos_list = [{'client_id': '1-2-0', 'pos': {'x': 0, 'y': 5.5, 'z': 0.5}},
-                       {'client_id': '1-2-1', 'pos': {'x': 0, 'y': 0, 'z': 1.1}},
-                       {'client_id': '1-2-2', 'pos': {'x': 2.67, 'y': -0.33, 'z': 0.5}},
-                       {'client_id': '1-2-3', 'pos': {'x': 4.03, 'y': 5.47, 'z': 1.1},
+anchor_pos_list = [{'client_id': '1-1-0', 'pos': {'x': 0, 'y': 5.5, 'z': 0.5}},
+                       {'client_id': '1-1-1', 'pos': {'x': 0, 'y': 0, 'z': 1.1}},
+                       {'client_id': '1-1-2', 'pos': {'x': 2.67, 'y': -0.33, 'z': 0.5}},
+                       {'client_id': '1-1-3', 'pos': {'x': 4.03, 'y': 5.47, 'z': 1.1},
                        }]
 h.set_anchor_location(anchor_pos_list)
 
