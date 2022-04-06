@@ -7,7 +7,7 @@ from .tag_locate_algorithm1 import TagLocateAlgorithm1
 from .uwb_modbus import UwbModbus
 from .modbus_pkt import split_packet
 
-from .client_id_utils import client_id_get_no, client_id_get_type, pack_client_id, client_id_remove_group
+from .client_id_utils import client_id_get_no, client_id_get_type, pack_client_id, client_id_remove_group, DEVICE_TYPE_TAG, DEVICE_TYPE_ANCHOR, DEVICE_TYPE_ANCHORZ
 from .dist_list_dict_convert import dist_list2dict
 
 from .mylog import logging
@@ -264,15 +264,15 @@ class uwb_zrzn(UwbModbus):
         :return: 两个设备间的距离，单位m
         """
         # 测 次基站和次基站之间的距离 或 次基站和标签之间的距离
-        if client_id_get_type(client_id1) == 3 or client_id_get_type(client_id2) == 3:
+        if client_id_get_type(client_id1) == DEVICE_TYPE_TAG or client_id_get_type(client_id2) == DEVICE_TYPE_TAG:
             # 存在 标签
-            if client_id_get_type(client_id1) == 3 and client_id_get_type(client_id2) == 3:
+            if client_id_get_type(client_id1) == DEVICE_TYPE_TAG and client_id_get_type(client_id2) == DEVICE_TYPE_TAG:
                 print('get_distance error：不能输入两个标签')
                 return
-            if client_id_get_type(client_id1) == 3:
+            if client_id_get_type(client_id1) == DEVICE_TYPE_TAG:
                 tag_client_id = client_id1
                 anchor_client_id = client_id2
-            else:  # client_id_get_type(client_id2) == 3:
+            else:
                 tag_client_id = client_id2
                 anchor_client_id = client_id2
 
@@ -303,9 +303,9 @@ class uwb_zrzn(UwbModbus):
         tag_client_list = []
         anchor_client_list = []
         for i in self.all_device_list:
-            if client_id_get_type(i['client_id']) == 2:
+            if client_id_get_type(i['client_id']) == DEVICE_TYPE_ANCHOR:
                 anchor_client_list.append(i)
-            elif client_id_get_type(i['client_id']) == 3:
+            elif client_id_get_type(i['client_id']) == DEVICE_TYPE_TAG:
                 tag_client_list.append(i)
         return anchor_client_list, tag_client_list
 
@@ -329,6 +329,7 @@ class uwb_zrzn(UwbModbus):
         if tag_no_list is None:
             tag_no_list = self.tag_no_list()
         self.set_basic_info_h(tag_no_list)  # self.uwb.set_cache_data_to_default()内部会调用此函数
+        #self.tag_list
 
         self.tag_list_cache_ready_cnt = ready_cnt
         self.start_measure_h(start_cmd)
@@ -374,9 +375,9 @@ class uwb_zrzn(UwbModbus):
 
         if wait_for_finish:
             if len(unfinished_tag) > 0:
-                print('测量标签位置失败 1-3-', unfinished_tag)
+                print('测量标签位置失败:', unfinished_tag)
             else:
-                print('测量标签位置完成 1-3-', tag_no_list)
+                print('测量标签位置完成:', tag_no_list)
 
     def _measure_all_tag_dist(self, tag_client_list, anchor_client_list=None):
         """

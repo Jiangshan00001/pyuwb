@@ -129,7 +129,7 @@ def split_packet(buf: bytes, pkt_length, read_error_stat):
 
         if not check_crc(buf[:pkt_length]):
             print('crc error. ', buf[:pkt_length].hex(),
-                  self.calc_crc(buf[:pkt_length - 2]).hex())
+                  calc_crc(buf[:pkt_length - 2]).hex())
             buf = buf[1:]
             read_error_cnt += 1
             ret_byte_process += 1

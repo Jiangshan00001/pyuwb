@@ -57,6 +57,49 @@ def is_anchor0(port_name):
     logger.debug('NO DETECTED')
     return False
 
+def is_anchor0_old(port_name):
+    logger.debug('is_anchor0:%s', port_name)
+    time.sleep(0.1)
+    try:
+        s = serial.Serial(port_name, 115200)  # 基站
+    except Exception as e:
+        # print('open port error', port_name, e)
+        return False
+
+    time.sleep(0.1)
+    count = s.inWaiting()  # 获取串口缓冲区数据
+    if count != 0:
+        #串口有数据，说明正在通讯？
+        d1 = bytes.fromhex('01 10 00 28 00 01 02 00 00')
+        d1_crc = calc_crc(d1)
+        d1 = d1+d1_crc
+        s.write(d1)
+        time.sleep(0.5)
+        count = s.inWaiting()
+        s.read(count)
+        count = s.inWaiting()
+        s.read(count)
+
+
+
+    d1 = bytes.fromhex('01 03 00 03 00 01')
+    d1_crc = calc_crc(d1)
+    d1 = d1 + d1_crc
+    s.write(d1)
+    time.sleep(0.1)
+    count = s.inWaiting()  # 获取串口缓冲区数据
+    if count != 0:
+        n = s.read(s.in_waiting)
+        logger.debug('%s', n.hex())
+        time.sleep(0.02)
+        if n == b"\x01\x03\x02\x00\x029\x85":
+            s.close()
+            logger.debug('OK')
+            return True
+
+    s.close()
+    logger.debug('NO DETECTED')
+    return False
 
 def is_print(port_name):
     logger.debug('is_print:%s', port_name)

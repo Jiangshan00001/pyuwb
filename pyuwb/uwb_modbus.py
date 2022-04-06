@@ -1,3 +1,4 @@
+import traceback
 import copy
 import time
 from .calc_crc import check_crc
@@ -5,25 +6,67 @@ from .client_id_utils import client_id_get_no
 from .modbus_pkt import get_read_pkt, get_write_pkt, decode_read_return, decode_write_return
 import serial
 from .mylog import logging
-from .detect_com_port import is_anchor0
+#from .detect_com_port import is_anchor0
 
 import serial.tools.list_ports
 
 
 logger = logging.getLogger(__name__)
 
-LABEL_NUM_ADDR = 0x29
-LABEL_START_ADDR = 0x37
-BAUDRATE_ADDR = 0x00
-MODBUS_ID_ADDR = 0x01
-DEVICE_MODE_ADDR = 3
-DEVICE_ID_ADDR = 4
-DEVICE_CHANNEL_AND_SPEED_ADDR = 5
-DEVICE_ANTENNA_DELAY_ADDR = 8
+# old reg addr
+REG_TAG_NUM = 0x29
+REG_TAG_LIST = 0x37
+REG_BAUD_RATE = 0x00
+REG_MODBUS_ID = 0x01
+REG_DEVICE_MODE = 3
+REG_DEVICE_ID = 4
+REG_CHANNEL_DATARAT = 5
+REG_ANT_DLY = 8
 KALMAN_PARAM_ADDR = 6
-MEASURE_MODE_ADDR = 2
-CONVERT_ANCHOR_TAG_PARAM_ADDR = 0x8d
-CONVERT_ANCHOR_TAG_START_CMD_ADDR = 0x28
+REG_MEASURE_MODE_ADDR = 2
+REG_CHANGE_ANC_ID = 0x8d
+REG_CALCULATE_EN = 0x28
+REG_CHANGE_FLAG=0x8e
+
+
+#new reg addr
+REG_TEST=0
+REG_FIRMWARE_VERSION=1
+REG_BAUD_RATE=2
+REG_MODBUS_ID=3
+REG_MEASURE_MODE_ADDR=4
+REG_DEVICE_MODE=5
+REG_DEVICE_ID=6
+REG_CHANNEL_DATARAT=7
+REG_ANT_DLY=8
+REG_ANC_ENABLED=9
+#Calculate_EN：
+REG_CALCULATE_EN=10
+REG_TAG_NUM=11
+#可用标签列表(依次为C寄存器byte0、C寄存器byte1、D寄存器byte0、D寄存器byte1......)
+REG_TAG_LIST=12
+REG_TAG_ID_NOW=62
+REG_CALCULATE_FLAG=63
+REG_DIST_A=64#=//主基站测距
+REG_DIST_B=65
+REG_DIST_C=66
+REG_DIST_D=67
+REG_DIST_E=68
+REG_DIST_F=69
+REG_DIST_G=70
+REG_DIST_H=71
+REG_ACCX_GET=72
+REG_ACCY_GET=73
+REG_ACCZ_GET=74
+REG_ACCX_OWN=75
+REG_ACCY_OWN=76
+REG_ACCZ_OWN=77
+REG_CHANGE_ANC_ID=78
+#1为将基站改为标签，2-标签改基站。 3-设置完成. 4-设置失败 5--等待中
+REG_CHANGE_FLAG=79
+REG_GROUP_ID=80
+REG_IAP_RESET=100# //复位重启寄存器
+
 
 
 class UwbModbus:
@@ -47,8 +90,48 @@ class UwbModbus:
         self.count_for_payload_pps = 0  # packet per second
 
         self.anchor_used_dict = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 0}  # 当前启动的基站列表，默认是6个
-
+        self.curr_used_anchor_no = [] #当前使用的基站号列表
+        self.curr_used_tag_no=[] #当前使用的标签号列表
         self.set_cache_data_to_default()
+
+    def is_anchorz(self, port_name):
+        logger.debug('is_anchorz:%s', port_name)
+        time.sleep(0.1)
+        is_ok = self.connect(port_name)
+        if not is_ok:
+            return False
+
+        count = self.port.inWaiting()
+        if count != 0:
+            #正在测量？上次未关闭设备?
+            self.start_measure_h(0)
+            time.sleep(0.5)
+            count = self.port.inWaiting()
+            self.port.read(count)
+            count = self.port.inWaiting()
+            self.port.read(count)
+
+        is_ok, ret = self.modbus_test_read()
+        if not is_ok:
+            return False
+        is_ok, ilist,bdat = self.read_modbus_h(REG_DEVICE_MODE,1)
+        if not is_ok:
+            return False
+
+        device_mode = ilist[0]
+        logger.debug('device mode:%s(%d)\n',self.device_model_to_str(device_mode), device_mode)
+
+        self.disconnect()
+        return True
+
+    def device_model_to_str(self, mode_int):
+        #设备模式 0：标签 1：次基站 2：主基站
+        if mode_int==0:
+            return 'tag'
+        elif mode_int==1:
+            return 'anchor'
+        elif mode_int==2:
+            return 'anchorz'
 
     def detect_com_port(self):
         """
@@ -60,16 +143,33 @@ class UwbModbus:
         port_list = list(serial.tools.list_ports.comports())
         if len(port_list) <= 0:
             # print("The Serial port can't find!")
-            print("The Serial port can't find!")
+            logger.warning("have no  Serial port find!")
             return ret
 
         for i in list(port_list):
             port_name = i[0]
-            if is_anchor0(port_name):
+            if self.is_anchorz(port_name):
                 ret = port_name
-                print('端口号存在')
+                logger.debug('port find')
 
         return ret
+
+    def disconnect(self):
+        # 关闭串口
+        if self.is_port_open():
+            self.port.close()
+            logger.debug('port disconnect')
+
+    def modbus_test_write(self, dat=0):
+        self.write_modbus_h(REG_TEST, 1,dat.to_bytes(2, byteorder='big', signed=False))
+
+    def modbus_test_read(self):
+        is_ok, ilist, bdat= self.read_modbus_h(REG_TEST, 1)
+        if not is_ok:
+            return False, None
+
+        return is_ok, ilist[0]
+
 
     def connect(self, com_port=None):
         """连接串口"""
@@ -79,22 +179,22 @@ class UwbModbus:
                 self.port_name = self.detect_com_port()
 
             if self.port_name is None:
-                print('找不到主基站设备')
-                return 'error'
+                print('could not find device')
+                return False
 
-            print('端口号：', self.port_name)
-            print('self.port_name：', self.port_name)
+            #print('port: ', self.port_name)
+            #print('self.port_name：', self.port_name)
 
             self.port = serial.Serial(port=self.port_name, baudrate=115200, timeout=0.1)  # , timeout=0.1
-            print('self.port：', self.port)
+            #print('self.port：', self.port)
             self.port.close()
             if not self.is_port_open():
                 self.port.open()
-            return 'ok'
+            return True
         except Exception as e:
-            pass
-            print('串口连接失败', e)
-            return 'error'
+            print('connect failed', e)
+            traceback.print_exc()
+            return False
 
     def _demo_write_data(self, data):
         if self.demo_inst is None:
@@ -102,7 +202,7 @@ class UwbModbus:
         return self.demo_inst.write(data)
 
     def _write_data(self, data):
-        # logger.debug('write_data: %s %s', data.hex(), '123456')
+        logger.debug('write_data: %s', data.hex())
 
         if self.is_demo_mode:
             self._demo_write_data(data)
@@ -155,7 +255,7 @@ class UwbModbus:
             if (byte_max > 0) and (byte_max <= len(data_get)):
                 break
 
-        # logger.debug('read_data_ret: %s', data_get.hex())
+        logger.debug('read_data_ret: %s', data_get.hex())
 
         return data_get
 
@@ -168,6 +268,13 @@ class UwbModbus:
         return check_crc(payload)
 
     def read_modbus_h(self, reg_start_addr, reg_count, addr=1):
+        """
+
+        :param reg_start_addr:
+        :param reg_count:
+        :param addr:
+        :return: is_ok, ilist, bytes_data
+        """
         """
             指定id、地址、寄存器个数
             01 --id号： id
@@ -188,10 +295,26 @@ class UwbModbus:
 
         self._write_data(to_w)
         to_read_len = 5 + reg_count * 2
-        ret = self._read_data(1, to_read_len)
+        ret = self._read_data(1, byte_max=to_read_len)
 
         ret2 = decode_read_return(ret, reg_count)
-        return ret2
+        is_ok=False
+        dat = None
+        if 'crc_ok' in ret2:
+            is_ok = ret2['crc_ok']
+
+        if is_ok:
+            ilist =[]
+            ll = len(ret2['data'])//2
+            for i in range(ll):
+                dat = int.from_bytes(ret2['data'][i*2:i*2+2], 'big', signed=False)
+                ilist.append(dat)
+        else:
+            ilist = []
+            ret2['data'] = ret
+
+        return is_ok,ilist, ret2['data']
+
 
     def _write_modbus_real(self, add2, reg_count, dat, id=1, just_gen_pkt=0):
         """ 例子：开始测距 01 10 00 28 00 01 02 00 04 A1 BB
@@ -236,7 +359,9 @@ class UwbModbus:
         self._write_data(to_r)
         ret = self._read_data(1, 8)
 
-        return decode_write_return(ret)
+        ret2= decode_write_return(ret)
+        #print(ret2)
+        return ret2
 
     def write_modbus_h(self, add2, reg_count, dat, id=1, just_gen_pkt=0):
         """ 例子：开始测距 01 10 00 28 00 01 02 00 04 A1 BB
@@ -305,7 +430,7 @@ class UwbModbus:
         for i in range(len(label_no_list) // 2):
             label_dat += label_no_list[i * 2 + 1].to_bytes(1, 'big') + label_no_list[i * 2].to_bytes(1, 'big')
 
-        self.write_modbus_h(LABEL_START_ADDR, (label_cnt + 1) // 2, label_dat)
+        self.write_modbus_h(REG_TAG_LIST, (label_cnt + 1) // 2, label_dat)
         # 因为设置标签都是bulk模式，所以此处不需要sleep
         if not self.bulk_mode:
             time.sleep(0.5)
@@ -313,7 +438,7 @@ class UwbModbus:
     def set_label_num_h(self, num: int):
         # logger.info('设置标签数：%d', num)
         num_b = num.to_bytes(2, 'big')
-        self.write_modbus_h(LABEL_NUM_ADDR, 1, num_b)
+        self.write_modbus_h(REG_TAG_NUM, 1, num_b)
         # 因为此处是bulk模式，所以此处不需要sleep
         if not self.bulk_mode:
             time.sleep(0.5)
@@ -324,10 +449,10 @@ class UwbModbus:
         :param rate_no:0：4800  1：9600 2：14400 3：19200 4：38400 5：56000 6：57600 7：115200  8：128000 9：256000
         :return:
         """
-        self.write_modbus_h(BAUDRATE_ADDR, 1, rate_no.to_bytes(2, 'big'))
+        self.write_modbus_h(REG_BAUD_RATE, 1, rate_no.to_bytes(2, 'big'))
 
     def set_modbus_id_h(self, id=1):
-        self.write_modbus_h(MODBUS_ID_ADDR, 1, id.to_bytes(2, 'big'))
+        self.write_modbus_h(REG_MODBUS_ID, 1, id.to_bytes(2, 'big'))
 
     def set_device_measure_mode_h(self, cmode=1, dmode=0):
         """
@@ -335,15 +460,40 @@ class UwbModbus:
         :param dmode:测距模式 1:二维模式 2：三维模式"
         :return:
         """
-        self.write_modbus_h(MEASURE_MODE_ADDR, 1, cmode.to_bytes(1, 'big') + dmode.to_bytes(1, 'big'))
+        self.write_modbus_h(REG_MEASURE_MODE_ADDR, 1, cmode.to_bytes(1, 'big') + dmode.to_bytes(1, 'big'))
 
     def set_device_mode_h(self, mode=2):
         """
 
-        :param mode:设备模式 0：标签 1：次基站 2：主基站
+        :param mode:设备模式 0：tag 1：anchor 2：anchorz
         :return:
         """
-        self.write_modbus_h(DEVICE_MODE_ADDR, 1, mode.to_bytes(2, 'big'))
+        if mode=='tag':
+            mode = 0
+        elif mode=='anchor':
+            mode = 1
+        elif mode=='anchorz':
+            mode = 2
+
+        if mode<0 or mode>2:
+            logger.error('mode not known %s', mode)
+
+        self.write_modbus_h(REG_DEVICE_MODE, 1, mode.to_bytes(2, 'big'))
+    def read_device_mode_h(self):
+        is_ok, ilist, bdat = self.read_modbus_h(REG_DEVICE_MODE, 1)
+        if not is_ok:
+            return False, None
+
+        return is_ok, ilist[0]
+
+    def set_modbus_id_h(self, mid):
+        """
+
+        :param mid: modbus_id/addr to set.
+        :return:
+        """
+        self.write_modbus_h(REG_MODBUS_ID, 1, mid.to_bytes(2, 'big'), id=0xff)
+
 
     def set_device_id_h(self, device_id=0):
         """
@@ -353,7 +503,15 @@ class UwbModbus:
         :param device_id:
         :return:
         """
-        self.write_modbus_h(DEVICE_ID_ADDR, 1, device_id.to_bytes(2, 'big'))
+        self.write_modbus_h(REG_DEVICE_ID, 1, device_id.to_bytes(2, 'big'))
+
+    def read_device_id_h(self):
+        is_ok, ilist, bdat = self.read_modbus_h(REG_DEVICE_ID, 1)
+        if not is_ok:
+            return False, None
+
+        return is_ok, ilist[0]
+
 
     def set_comm_channel_and_speed_h(self, channel=1, speed=2):
         """
@@ -363,7 +521,7 @@ class UwbModbus:
         :param speed:
         :return:
         """
-        self.write_modbus_h(DEVICE_CHANNEL_AND_SPEED_ADDR, 1, channel.to_bytes(1, 'big') + speed.to_bytes(1, 'big'))
+        self.write_modbus_h(REG_CHANNEL_DATARAT, 1, channel.to_bytes(1, 'big') + speed.to_bytes(1, 'big'))
 
     def set_kalman_h(self, param_q=3, param_r=0x0a):
         """
@@ -381,7 +539,7 @@ class UwbModbus:
         :param delay:
         :return:
         """
-        return self.write_modbus_h(DEVICE_ANTENNA_DELAY_ADDR, 1, delay.to_bytes(2, 'big'), just_gen_pkt=just_gen_pkt)
+        return self.write_modbus_h(REG_ANT_DLY, 1, delay.to_bytes(2, 'big'), just_gen_pkt=just_gen_pkt)
 
     def set_anchor_enable_h(self, jizhan_index=0, enabled=1):
         """
@@ -400,6 +558,7 @@ class UwbModbus:
             return
         # logger.info('设置基站使能 %d %d', jizhan_index, enabled)
         # FIXME: 此处基站使能地址不连续???
+
         jizhan_enable_addr = [12, 16, 20, 24, 28, 32, 36]
         self.write_modbus_h(jizhan_enable_addr[jizhan_index], 1, enabled.to_bytes(2, 'big'))
 
@@ -414,7 +573,7 @@ class UwbModbus:
         """
         # logger.info('start_measure %d', mode)
         self.measure_mode = mode
-        self.write_modbus_h(CONVERT_ANCHOR_TAG_START_CMD_ADDR, 1, mode.to_bytes(2, 'big'))
+        self.write_modbus_h(REG_CALCULATE_EN, 1, mode.to_bytes(2, 'big'))
         time.sleep(0.3)
 
     def stop_measure_h(self):
@@ -437,13 +596,11 @@ class UwbModbus:
         return True
 
     def is_convert_complete_h(self):
-        ret = self.read_modbus_h(0x8e, 1)
-        if 'crc_ok' not in ret:
+        is_ok, ilist, bdat = self.read_modbus_h(REG_CHANGE_FLAG, 1)
+        if  not is_ok:
             return False
-        if not ret['crc_ok']:
-            return False
-        if ret['data'] != b'\x00\x03':
-            print('is_convert_complete: ', ret['data'].hex())
+        if ilist[0] != 0x03:
+            print('is_convert_complete: ', bdat.hex())
             return False
         print('is_convert_complete OK')
         return True
@@ -456,9 +613,9 @@ class UwbModbus:
         # 将标签0改为B基站 ：  01 10 00 8d 00 02 04 00 00 00 02 A1 BB
         # 开始修改 ：  01 10 00 28 00 01 02 00 05 A1 BB
         jizhan_id = int(client_id[-1]).to_bytes(1, 'big')
-        self.write_modbus_h(CONVERT_ANCHOR_TAG_PARAM_ADDR, 2, jizhan_id + b'\x00\x00\x02')
+        self.write_modbus_h(REG_CHANGE_ANC_ID, 2, jizhan_id + b'\x00\x00\x02')
         time.sleep(0.5)
-        ret = self.write_modbus_h(CONVERT_ANCHOR_TAG_START_CMD_ADDR, 1, b'\x00\x05')
+        ret = self.write_modbus_h(REG_CHANGE_FLAG, 1, b'\x00\x05')
         time.sleep(0.5)
         return ret
 
@@ -490,9 +647,9 @@ class UwbModbus:
         # 开始修改 ：  01 10 00 28 00 01 02 00 05 A1 BB
 
         jizhan_id = int(client_id[-1]).to_bytes(1, 'big')
-        self.write_modbus_h(CONVERT_ANCHOR_TAG_PARAM_ADDR, 2, jizhan_id + b'\x00\x00\x01')
+        self.write_modbus_h(REG_CHANGE_ANC_ID, 2, jizhan_id + b'\x00\x00\x01')
         time.sleep(0.2)
-        ret = self.write_modbus_h(CONVERT_ANCHOR_TAG_START_CMD_ADDR, 1, b'\x00\x05')
+        ret = self.write_modbus_h(REG_CHANGE_FLAG, 1, b'\x00\x05')
         return ret
 
     def convert_anchor_to_tag_h(self, client_id, loop_max_cnt=5):
@@ -522,17 +679,12 @@ class UwbModbus:
         self.start_measure_h(1)
         time.sleep(1)
         # FIXME: 此处需要确认地址是从哪个基站开始，改为从主基站开始???
-        ret = self.read_modbus_h(0x30, 7)
+        is_ok, ilist, bdat = self.read_modbus_h(REG_DIST_A, 8)
 
         dist_b = [self.EMPTY_DIST_VAL for i in range(8)]
-        if 'data' in ret:
-            dist_b[0] = (ret['data'][0] * 256 + ret['data'][1]) / 100.0
-            dist_b[1] = (ret['data'][2] * 256 + ret['data'][3]) / 100.0
-            dist_b[2] = (ret['data'][4] * 256 + ret['data'][5]) / 100.0
-            dist_b[3] = (ret['data'][6] * 256 + ret['data'][7]) / 100.0
-            dist_b[4] = (ret['data'][8] * 256 + ret['data'][9]) / 100.0
-            dist_b[5] = (ret['data'][10] * 256 + ret['data'][11]) / 100.0
-            dist_b[6] = (ret['data'][12] * 256 + ret['data'][13]) / 100.0
+        if is_ok:
+            for i in range(8):
+                dist_b[i] = ilist[i]/100.0
 
         self.stop_measure_h()
         # time.sleep(0.5)
@@ -543,119 +695,61 @@ class UwbModbus:
         """标签20 21 到各次基站的距离"""
         # 每个标签的距离
         v = self.EMPTY_DIST_VAL
-        self.tag_list = {20: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         21: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         22: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         23: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         24: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         25: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                              'dist_cache': [[], [], [], [], [], [], [], []]},
-                         0: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         1: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         2: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         3: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         4: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         5: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
-                         6: {'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
-                             'dist_cache': [[], [], [], [], [], [], [], []]},
+        self.tag_list_item_default={'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
+                              'dist_cache': [[], [], [], [], [], [], [], []]}
+        self.tag_list = {1:copy.deepcopy(self.tag_list_item_default),
                          }
+        for i in self.curr_used_tag_no:
+            self.tag_list[i] = copy.deepcopy(self.tag_list_item_default)
+
+        self.tag_list_cache_item_default={'dist': [[], [], [], [], [], [], [], []]}
         # 每个标签的距离缓存，每秒钟会有总共约48个距离，取平均后放入tag_list
-        self.tag_list_cache = {20: {'dist': [[], [], [], [], [], [], [], []]},
-                               21: {'dist': [[], [], [], [], [], [], [], []]},
-                               22: {'dist': [[], [], [], [], [], [], [], []]},
-                               23: {'dist': [[], [], [], [], [], [], [], []]},
-                               24: {'dist': [[], [], [], [], [], [], [], []]},
-                               25: {'dist': [[], [], [], [], [], [], [], []]},
-                               0: {'dist': [[], [], [], [], [], [], [], []]},
-                               1: {'dist': [[], [], [], [], [], [], [], []]},
-                               2: {'dist': [[], [], [], [], [], [], [], []]},
-                               3: {'dist': [[], [], [], [], [], [], [], []]},
-                               4: {'dist': [[], [], [], [], [], [], [], []]},
-                               5: {'dist': [[], [], [], [], [], [], [], []]},
-                               6: {'dist': [[], [], [], [], [], [], [], []]},
+        self.tag_list_cache = {1: copy.deepcopy(self.tag_list_cache_item_default),
                                }
+        for i in self.curr_used_tag_no:
+            self.tag_list_cache[i] = copy.deepcopy(self.tag_list_cache_item_default)
+
 
         self.tag_list_cache_ready_cnt = 10  # 用于缓存几个数据，就可以进行平均放入tag_list中的设置。默认10各数据。
 
-        self.dist_decode_cnt = {0: 0, 1: 0, 20: 0, 21: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0}
+        self.dist_decode_cnt = {1: 0}
 
         """标签20 21 的加速度"""
         # 标签20 21 加速度
-        self.tag_a_xyz = {20: {'x': 0, 'y': 0, 'z': 1},
-                          21: {'x': 0, 'y': 0, 'z': 1},
-                          22: {'x': 0, 'y': 0, 'z': 1},
-                          23: {'x': 0, 'y': 0, 'z': 1},
-                          24: {'x': 0, 'y': 0, 'z': 1},
-                          25: {'x': 0, 'y': 0, 'z': 1},
-                          0: {'x': 0, 'y': 0, 'z': 1},
-                          1: {'x': 0, 'y': 0, 'z': 1},
-                          2: {'x': 0, 'y': 0, 'z': 1},
-                          3: {'x': 0, 'y': 0, 'z': 1},
-                          4: {'x': 0, 'y': 0, 'z': 1},
-                          5: {'x': 0, 'y': 0, 'z': 1},
-                          6: {'x': 0, 'y': 0, 'z': 1},
-                          }
-        # 标签20 21 缓存加速度，多个加速度求平均值后，添加到 tag_a_xyz
-        self.tag_a_xyz_cache = {20: {'x': [], 'y': [], 'z': []},
-                                21: {'x': [], 'y': [], 'z': []},
-                                22: {'x': [], 'y': [], 'z': []},
-                                23: {'x': [], 'y': [], 'z': []},
-                                24: {'x': [], 'y': [], 'z': []},
-                                25: {'x': [], 'y': [], 'z': []},
-                                0: {'x': [], 'y': [], 'z': []},
-                                1: {'x': [], 'y': [], 'z': []},
-                                2: {'x': [], 'y': [], 'z': []},
-                                3: {'x': [], 'y': [], 'z': []},
-                                4: {'x': [], 'y': [], 'z': []},
-                                5: {'x': [], 'y': [], 'z': []},
-                                6: {'x': [], 'y': [], 'z': []},
+        self.tag_a_xyz_item_default = {'x': 0, 'y': 0, 'z': 1}
+        self.tag_a_xyz = {1: copy.deepcopy(self.tag_a_xyz_item_default),}
+        for i in self.curr_used_tag_no:
+            self.tag_a_xyz[i] = copy.deepcopy(self.tag_a_xyz_item_default)
 
-                                }
+
+
+        # 标签20 21 缓存加速度，多个加速度求平均值后，添加到 tag_a_xyz
+        self.tag_a_xyz_cache_item_default = {'x': [], 'y': [], 'z': []}
+
+        self.tag_a_xyz_cache = {20: copy.deepcopy(self.tag_a_xyz_cache_item_default),                                }
+        for i in self.curr_used_tag_no:
+            self.tag_a_xyz_cache[i] = copy.deepcopy(self.tag_a_xyz_cache_item_default)
+
         self.tag_a_xyz_cache_count = {}
 
         # 标签测距错误数、测距总次数
         self.biaoqian_jizhan_error = {20: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      21: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      22: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      23: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      24: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      25: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      0: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      1: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      2: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      3: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      4: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      5: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                                      6: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
                                       }
+        for i in self.curr_used_tag_no:
+            self.biaoqian_jizhan_error[i] = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
+
+
         # 标签位置
         self.tag_pos = {20: {'pos_x': 0, 'pos_x_max': 0, }}
+        for i in self.curr_used_tag_no:
+            self.tag_pos[i] = {'pos_x': 0, 'pos_x_max': 0, }
+
+
         # 标签位置的最大值，最小值
         self.tag_pos_error = {20: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              21: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              22: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              23: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              24: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              25: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              0: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              1: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              2: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              3: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              4: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              5: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
-                              6: {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]},
                               }
+        for i in self.curr_used_tag_no:
+            self.tag_pos_error[i] = {'x': [0, 0], 'y': [0, 0], 'z': [0, 0]}
 
     def clear_measure1_reg(self):
         """
@@ -677,7 +771,7 @@ class UwbModbus:
         # 基站: B H :14379
         # 基本设置
         self.set_buardrate_h()
-        self.set_modbus_id_h()
+        self.set_modbus_id_h(1)
         self.set_device_measure_mode_h()
         self.set_device_mode_h()
         self.set_device_id_h()
@@ -690,16 +784,19 @@ class UwbModbus:
         if except_anchor_list is None:
             except_anchor_list = []
         except_anchor_list.extend([i for i in self.anchor_used_dict if not self.anchor_used_dict[i]])
-        self.curr_used_anchor = []
+        self.curr_used_anchor_no = []
+
+
         for i in range(7):
             if except_anchor_list is not None:
                 if i in except_anchor_list:
                     self.set_anchor_enable_h(i, 0)
                     continue
             self.set_anchor_enable_h(i, 1)
-            self.curr_used_anchor.append(i)
+            self.curr_used_anchor_no.append(i)
 
         #self.curr_anchor_stat = {i: {'cnt': 0, 'success': 0} for i in self.curr_used_anchor}
+        self.curr_used_tag_no=copy.deepcopy(tag_no_list)
         self.set_label_h(tag_no_list)  # 使用标签
         self.set_label_num_h(len(tag_no_list))  # 标签数量 1
 
@@ -846,3 +943,17 @@ class UwbModbus:
             d_dict[i_index] = avg
 
         return d_dict
+
+
+
+
+
+
+
+
+
+
+
+
+
+

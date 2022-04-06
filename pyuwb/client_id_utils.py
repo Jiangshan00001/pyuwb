@@ -4,6 +4,10 @@ __license__ = ""
 __version__ = "1.0"
 
 
+DEVICE_TYPE_TAG=0 #OLD3
+DEVICE_TYPE_ANCHOR=1 #OLD2
+DEVICE_TYPE_ANCHORZ=2 #OLD1
+
 def client_id_remove_group(client_id):
     return str(client_id_get_type(client_id)) + '-' + str(client_id_get_no(client_id))
 
