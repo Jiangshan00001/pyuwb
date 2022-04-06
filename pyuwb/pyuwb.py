@@ -1,7 +1,8 @@
 import copy
 import time
 import math
-from numpy import short
+#from numpy import short
+from .my_short import my_short as short
 from .anchor_locate_algorithm1 import AnchorLocateAlgorithm1
 from .tag_locate_algorithm1 import TagLocateAlgorithm1
 from .uwb_modbus import UwbModbus
@@ -52,6 +53,7 @@ class uwb_zrzn(UwbModbus):
         self.tag_locate_algorithm = TagLocateAlgorithm1()
         self.group_id = 1  # device group
         self.pos_callback = None
+
 
     def set_pos_callback(self, callback_func):
         """
