@@ -1,5 +1,9 @@
 from .dingwei import Dingwei
 
+from .mylog import logging
+
+logger = logging.getLogger(__name__)
+
 class TagLocateAlgorithm1(Dingwei):
     def __init__(self):
         super().__init__()
@@ -19,7 +23,7 @@ class TagLocateAlgorithm1(Dingwei):
         # {'client_id': '1-3-1', 'dist': {'1-2-0': 5 * (10 ** 0.5), '1-2-1': 5 * (10 ** 0.5), '1-2-2': 5 * (10 ** 0.5), '1-2-3': 5 * (10 ** 0.5)，...}, ...}
         tag_dict = {'dist': tag_dist, 'client_id': tag_client_id}
         tag_pos_one_list = self.dingwei_biaoqian_dist_to_pos(jizhan_pos_param, [tag_dict], using_kalman=None)
-        print('tag_pos_one_list', tag_pos_one_list)
+        logger.debug('tag_pos_one_list %s', tag_pos_one_list)
         return tag_pos_one_list[0]['pos']
 
 

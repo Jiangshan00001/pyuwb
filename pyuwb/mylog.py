@@ -32,3 +32,4 @@ for i in log_colors:
     logging.addLevelName( i, log_colors[i]+"%s\033[1;0m" % logging.getLevelName(i))
 
 
+logging.disable(logging.DEBUG)

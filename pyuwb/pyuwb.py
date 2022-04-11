@@ -5,7 +5,7 @@ import math
 from .my_short import my_short as short
 from .anchor_locate_algorithm1 import AnchorLocateAlgorithm1
 from .tag_locate_algorithm1 import TagLocateAlgorithm1
-from .uwb_modbus import UwbModbus
+from .uwb_modbus import UwbModbus,ANCHORZ_NO
 from .modbus_pkt import split_packet
 
 from .client_id_utils import client_id_get_no, client_id_get_type, pack_client_id, client_id_remove_group, DEVICE_TYPE_TAG, DEVICE_TYPE_ANCHOR, DEVICE_TYPE_ANCHORZ
@@ -18,18 +18,20 @@ logger = logging.getLogger(__name__)
 
 def get_cali_param_all():
     return {
-        '2-0': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '2-1': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '2-2': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '2-3': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '2-4': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '2-5': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-1': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-2': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-3': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-4': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-20': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
-        '3-21': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-0': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-1': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-2': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-3': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-4': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '1-5': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-1': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-2': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-3': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-4': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-5': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-6': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-20': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
+        '0-21': {'0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0, '5': 1.0, },
     }
 
 
@@ -66,6 +68,55 @@ class uwb_zrzn(UwbModbus):
     # 检测周围所有设备
     def detect_device(self, tag_no_list=None, anchor_no_list=None):
         """
+        tag_no_list: 用户认为存在的标签号 [1,2,3,11]
+        anchor_no_list： 用户认为存在的基站 [0,1,2]
+        """
+        not_exist_anchor_no_list = []  # 不存在的基站
+        for i in range(7):
+            if i not in anchor_no_list:
+                not_exist_anchor_no_list.append(i)
+        # 标签测距
+        self.set_to_start(tag_no_list, 1, 6, not_exist_anchor_no_list)
+        self.locate_loop(tag_no_list, 1, 5)
+        self.stop_measure_h()
+        # 处理标签距离信息，获取在线设备
+        tag_dict = {}
+        for i in self.tag_list:
+            logger.info('标签测距值(主基站、0,1,2,3...)： %s %s', i, self.tag_list[i]['dist'])
+            tag_dict[i] = self.tag_list[i]['dist']
+        ret = self._get_device_exist_using_dist(tag_dict)
+        # 设置在线设备
+        tag_no_list = ret['exist_tag']
+        anchor_no_list = ret['exist_anchor']
+        self.set_device(tag_no_list, anchor_no_list)
+        return tag_no_list, anchor_no_list
+
+
+    def _get_device_exist_using_dist(self, tag_dict):
+        """
+        分析哪些设备在线
+        :param tag_dict: {20: [1,1,2,3,-1,-1,-1,-1],    -----------1-1-0、1-2-0、1-2-1...
+                          21: [1,1,2,3,-1,-1,-1,-1],
+                          22: [-1,-1,-1,-1,-1,-1,-1,-1]}
+        :return: {'exist_anchor': [0, 1, 2, 3], 'exist_tag': [20, 21]}
+        """
+        ret = {'exist_anchor': [], 'exist_tag': [], 'is_exist_main_anchor': 1}  # is_exist_main_anchor主基站是否存在：1在
+        for i in tag_dict:
+            for index, val in enumerate(tag_dict[i]):
+                if val != -1:
+                    ret['exist_tag'].append(i)
+                    if index==0:
+                        #主基站不写入，因为必须存在，而不进行定位
+                        continue
+                    ret['exist_anchor'].append(index)
+
+        ret['exist_tag'] = list(set(ret['exist_tag']))
+        ret['exist_anchor'] = list(set(ret['exist_anchor']))
+        logger.info('存在设备：%s', ret)
+        return ret
+
+    def detect_device_slow(self, tag_no_list=None, anchor_no_list=None):
+        """
         detect if device exist
         如果是空列表，则基站会检测：0,1,2,3,4,5,6,7存在不存在，标签会检测：1-10存在不存在
         :param tag_no_list: tag_no will be detected. will detect 1-10 tag is exist or not if None or empty.  如果是空标签会检测：1-10号标签是否存在
@@ -77,8 +128,8 @@ class uwb_zrzn(UwbModbus):
         if anchor_no_list is None or anchor_no_list == []:
             anchor_no_list = [i for i in range(8)]
 
-        tag_client_list = [pack_client_id(self.group_id, 3, i) for i in tag_no_list]
-        anchor_client_list = [pack_client_id(self.group_id, 2, i) for i in anchor_no_list]
+        tag_client_list = [pack_client_id(self.group_id, DEVICE_TYPE_TAG, i) for i in tag_no_list]
+        anchor_client_list = [pack_client_id(self.group_id, DEVICE_TYPE_ANCHOR, i) for i in anchor_no_list]
 
         """检测设备是否存在"""
         # 避免上次通讯错误，导致0标签的存在
@@ -141,7 +192,7 @@ class uwb_zrzn(UwbModbus):
         for i in self.all_device_list:
             tag_type = client_id_get_type(i['client_id'])
             tag_no = client_id_get_no(i['client_id'])
-            if tag_type == 3:
+            if tag_type == DEVICE_TYPE_TAG:
                 used_tag_no_list.append(tag_no)
         return used_tag_no_list
 
@@ -154,11 +205,11 @@ class uwb_zrzn(UwbModbus):
         for i in self.all_device_list:
             tag_type = client_id_get_type(i['client_id'])
             tag_no = client_id_get_no(i['client_id'])
-            if tag_type == 2:
+            if tag_type == DEVICE_TYPE_ANCHOR:
                 used_anchor_no_list.append(tag_no)
         return used_anchor_no_list
 
-    def set_device(self, tag_no_list, anchor_no_list, using_master=0):
+    def set_device(self, tag_no_list, anchor_no_list):
         """
         set device to use.
         this function will auto called when  you call detect_device.
@@ -166,15 +217,14 @@ class uwb_zrzn(UwbModbus):
         暂不支持通过master进行定位
         :param tag_no_list: tag no in the system. eg:[1,2,3,...]
         :param anchor_no_list: anchor no in the system eg: [0,1,2,3]
-        :param using_master:0
         :return:None
         """
         self.all_device_list = []
         for i in tag_no_list:
-            tag_client_id = pack_client_id(self.group_id, 3, i)
+            tag_client_id = pack_client_id(self.group_id, DEVICE_TYPE_TAG, i)
             self.all_device_list.append({'client_id': tag_client_id, 'dist': [], 'pos': []})
         for i in anchor_no_list:
-            anchor_client_id = pack_client_id(self.group_id, 2, i)
+            anchor_client_id = pack_client_id(self.group_id, DEVICE_TYPE_ANCHOR, i)
             self.all_device_list.append({'client_id': anchor_client_id, 'dist': [], 'pos': []})
 
         self.all_device_dict = {i['client_id']: i for i in self.all_device_list}
@@ -185,7 +235,7 @@ class uwb_zrzn(UwbModbus):
                 self.anchor_used_dict[i] = 0
             else:
                 self.anchor_used_dict[i] = 1
-            print('当前启动的基站列表', self.anchor_used_dict)
+        logger.info('当前启动的基站列表: %s', self.anchor_used_dict)
 
         return None
 
@@ -203,7 +253,7 @@ class uwb_zrzn(UwbModbus):
 
         # 次基站之间测距
         anchor_list = self._measure_all_anchor_dist(anchor_list, measure_ready_cnt)
-
+        print('基站之间测距：', anchor_list)
         for i in range(len(anchor_list)):
             if i < len(direction_point):
                 anchor_list[i]['direction_point'] = direction_point[i]
@@ -245,6 +295,8 @@ class uwb_zrzn(UwbModbus):
         # 标签与次基站之间的距离
         self._measure_all_tag_dist(tag_client_list)
 
+        #FIXME: remove anchorz. as it do not for locating
+
         ret_tag_dict = {}
         # FIXME: 此处获取各标签位置，传入 定位算法函数，获取返回值-2022.3.23
         # 各标签列表：[{client_id:, dist:{1-2-0:50,1-2-1:30},...},...]
@@ -258,19 +310,58 @@ class uwb_zrzn(UwbModbus):
         # 结束
         return ret_tag_dict
 
-    def measure_distance(self, client_id1, client_id2):
+    def measure_distance(self, client_id1, client_id2, ready_cnt=30):
         """
         测量获取距离
         :param client_id1:
         :param client_id2:
+        :param ready_cnt: 测距次数。默认测量10次取均值返回
         :return: 两个设备间的距离，单位m
         """
-        # 测 次基站和次基站之间的距离 或 次基站和标签之间的距离
+        if client_id_get_type(client_id2) == DEVICE_TYPE_ANCHORZ:
+            #swap
+            client_id1, client_id2 = client_id2, client_id1
+        if (client_id_get_type(client_id1) == DEVICE_TYPE_TAG) and (client_id_get_type(client_id2) == DEVICE_TYPE_TAG):
+            #两个都是标签，没法测距，返回错误
+            return -1
+
+        if client_id_get_type(client_id1) == DEVICE_TYPE_TAG:
+            #swap
+            client_id1, client_id2=client_id2, client_id1
+
+
+        if client_id_get_type(client_id2) == DEVICE_TYPE_ANCHOR:
+            # 两个次基站 测距
+            anchor_dict=[{'client_id': client_id2, 'dist': {}}]
+            if client_id_get_type(client_id1) != DEVICE_TYPE_ANCHORZ:
+                anchor_dict.append({'client_id': client_id1, 'dist': {}})
+            self._measure_all_anchor_dist(anchor_dict, ready_cnt)
+            for i in self.all_device_list:
+                if i['client_id'] == client_id2:
+                    return i['dist_list'][client_id_get_no(client_id2)]
+                elif i['client_id'] == client_id2:
+                    return i['dist_list'][client_id_get_no(client_id1)]
+        elif client_id_get_type(client_id2) == DEVICE_TYPE_TAG:
+            tag_client_id = client_id2
+            anchor_client_id = client_id1
+            # 标签和基站之间测距
+            dist = self._measure_all_tag_dist(tag_client_list=[{'client_id': tag_client_id, 'dist': {}}],
+                                              anchor_client_list=[{'client_id': anchor_client_id, 'dist': {}}],ready_cnt=ready_cnt)
+            return dist[0][anchor_client_id]
+
+        logging.error('unknown device type: %s %s', client_id1, client_id2)
+        return -1
+
+
+
+
+        # 测 次基站和次基站之间的距离 或 次基站和标签之间的距离 或主基站和标签之间的距离，主基站和次基站之间的距离
+        # 不能测量：标签和标签之间的距离
+
+
+
         if client_id_get_type(client_id1) == DEVICE_TYPE_TAG or client_id_get_type(client_id2) == DEVICE_TYPE_TAG:
             # 存在 标签
-            if client_id_get_type(client_id1) == DEVICE_TYPE_TAG and client_id_get_type(client_id2) == DEVICE_TYPE_TAG:
-                print('get_distance error：不能输入两个标签')
-                return
             if client_id_get_type(client_id1) == DEVICE_TYPE_TAG:
                 tag_client_id = client_id1
                 anchor_client_id = client_id2
@@ -321,19 +412,24 @@ class uwb_zrzn(UwbModbus):
         ret = []
         for i in all_anchor_client_id_list:
             reti = {'client_id': i}
-            reti['dist'] = self._measure_one_anchor_dist(i, measure_ready_cnt)
+            if client_id_get_no(i)==0:
+                # 0 anchor could not change to tag and measure
+                continue
+            reti['dist'] = self._measure_one_anchor_dist(i, measure_ready_cnt, False)
             ret.append(reti)
         print("基站自动测距结束")
         return ret
 
-    def set_to_start(self, tag_no_list=None, ready_cnt=30, start_cmd=6):
+    def set_to_start(self, tag_no_list=None, ready_cnt=30, start_cmd=6,except_anchor_list=None):
 
         if tag_no_list is None:
             tag_no_list = self.tag_no_list()
-        self.set_basic_info_h(tag_no_list)  # self.uwb.set_cache_data_to_default()内部会调用此函数
-        #self.tag_list
+        self.set_basic_info_h(tag_no_list,except_anchor_list)  # self.uwb.set_cache_data_to_default()内部会调用此函数
+
 
         self.tag_list_cache_ready_cnt = ready_cnt
+
+
         self.start_measure_h(start_cmd)
 
     def locate_loop(self, tag_no_list=None, wait_for_finish=0, timeout=10.0):
@@ -349,6 +445,10 @@ class uwb_zrzn(UwbModbus):
         if tag_no_list is None:
             tag_no_list = self.tag_no_list()
         cijizhan_no_list = self.anchor_no_list()
+
+        # FIXME: 此处需要次基站和主基站 两种基站的个数
+        if  0 not in cijizhan_no_list:
+            cijizhan_no_list.append(0)
 
         self._measure_read()
         if not wait_for_finish:
@@ -368,8 +468,10 @@ class uwb_zrzn(UwbModbus):
                     for j in self.tag_list[i]['dist']:
                         if j != self.EMPTY_DIST_VAL:
                             nz_cnt += 1
-                    if nz_cnt >= len(cijizhan_no_list):
+                    if nz_cnt >= len(cijizhan_no_list):# 因为主基站也会测距，所以此处+1 TODO: 还要其他函数需要修改通样的？
                         ready_tag.append(i)
+                    else:
+                        logger.debug("nz_cnt:%d < %d",nz_cnt,len(cijizhan_no_list))
 
                 for i in ready_tag:
                     unfinished_tag.remove(i)
@@ -377,16 +479,16 @@ class uwb_zrzn(UwbModbus):
 
         if wait_for_finish:
             if len(unfinished_tag) > 0:
-                print('测量标签位置失败:', unfinished_tag)
+                logger.debug('测量标签位置失败:%s', unfinished_tag)
             else:
-                print('测量标签位置完成:', tag_no_list)
+                logger.debug('测量标签位置完成:%s', tag_no_list)
 
-    def _measure_all_tag_dist(self, tag_client_list, anchor_client_list=None):
+    def _measure_all_tag_dist(self, tag_client_list, anchor_client_list=None, ready_cnt=30):
         """
 
         :param tag_client_list:[{client_id:,}, ...]
         :param anchor_client_list:[{client_id:,}, ...]
-        :return:
+        :return:[{'1-1-0:'1.1, '1-1-1':3.4},...] every item is a dict for every tag dist with all anchors.
         """
         tag_client_id_list = [i['client_id'] for i in tag_client_list]
         tag_no_list = [client_id_get_no(i) for i in tag_client_id_list]
@@ -394,9 +496,8 @@ class uwb_zrzn(UwbModbus):
         if anchor_client_list is None:
             anchor_client_list, tinfo = self._get_anchor_and_tag_info()
 
-        cijizhan_no_list = [client_id_get_no(i['client_id']) for i in anchor_client_list]
-        self.set_to_start(tag_no_list)
-        self.locate_loop(tag_no_list, 1, 10)
+        self.set_to_start(tag_no_list,ready_cnt)
+        self.locate_loop(tag_no_list, 1, ready_cnt*(len(tag_client_list)+1)/10.0)
 
         self.stop_measure_h()
         self.tag_list_cache_ready_cnt = 10
@@ -415,7 +516,7 @@ class uwb_zrzn(UwbModbus):
     def _start_anchor_dist_measure(self, client_id, ready_cnt=40):
         self.curr_anchor_to_measure = client_id  # FIXME: client_id[2:]
         self.bulk_mode = 0
-        print("基站自动定位测距：", client_id)
+        logger.info("基站自动定位测距：%s", client_id)
 
         self.bulk_mode = 0
         # 基站转标签
@@ -511,8 +612,8 @@ class uwb_zrzn(UwbModbus):
         ctime = time.time()
         if ctime - self.count_for_payload_timer > 3.0:
             self.count_for_payload_pps = round(self.count_for_payload / (ctime - self.count_for_payload_timer), 1)
-            print('count_for_payload: %s', self.count_for_payload_pps)
-            print('error_status: %s', self.biaoqian_jizhan_error)
+            logger.debug('count_for_payload: %s', self.count_for_payload_pps)
+            logger.debug('error_status: %s', self.biaoqian_jizhan_error)
             self.count_for_payload = 0
             self.count_for_payload_timer = ctime
 
@@ -523,9 +624,9 @@ class uwb_zrzn(UwbModbus):
         :param last_data:
         :return:
         """
-        print('avg_dist_data 输入 %s %s', data_list, last_data)
+        logger.debug('avg_dist_data 输入 %s %s', data_list, last_data)
         if len(data_list) == 0:
-            print('avg_dist_data result:', last_data)
+            logger.debug('avg_dist_data result:', last_data)
             return last_data, 0
         elif len(data_list) == 1 and last_data == self.EMPTY_DIST_VAL:
             # 针对第一个测距数据可能不对的问题，如果之前没有测距值，现在只有1个测距值，则不使用，等待有多个测距值再用
@@ -540,9 +641,9 @@ class uwb_zrzn(UwbModbus):
 
         dlen = len(data_list)
         dist_avg = sum(data_list) / len(data_list)
-        print('avg_dist_data result: %s', dist_avg)
+        logger.debug('avg_dist_data result: %s', dist_avg)
         if (math.fabs(dist_avg - last_data) > 1) and (last_data != self.EMPTY_DIST_VAL):
-            print('距离跳跃太大：%s %s %s', data_list, dist_avg, last_data)
+            logger.debug('距离跳跃太大：%s %s %s', data_list, dist_avg, last_data)
         return dist_avg, 1
 
     def _tag_dist_cache_to_one(self, tag_id):
@@ -551,8 +652,8 @@ class uwb_zrzn(UwbModbus):
         :return:
         """
         currdist_list = self.tag_list_cache[tag_id]['dist']
-        print('tag_id= %s 距离测距次数:%s', tag_id, self.dist_decode_cnt[tag_id])
-        print('距离测距数值:%s', currdist_list)
+        logger.debug('tag_id= %s 距离测距次数:%s', tag_id, self.dist_decode_cnt[tag_id])
+        logger.debug('距离测距数值:%s', currdist_list)
 
         for i in range(len(currdist_list)):
             anchor_index = i
@@ -569,7 +670,7 @@ class uwb_zrzn(UwbModbus):
                     tag_id_c = self.curr_anchor_to_measure  # 1-2-0
                 else:
                     # 某一个标签正在测距 20、21、1、2、3、4
-                    tag_id_c = pack_client_id(self.group_id, 3, tag_id)
+                    tag_id_c = pack_client_id(self.group_id, DEVICE_TYPE_TAG, tag_id)
                 #  tag_id：2-4或3-20，anchor_id：0-5之间的一个数字，curr_val：距离，cali_param：计算参数
                 curr_val = self._data_cali_v2(client_id=tag_id_c, anchor_id_n=i, curr_val=curr_val,
                                               cali_param=self.cali_param)
@@ -592,9 +693,15 @@ class uwb_zrzn(UwbModbus):
         """
 
         ainfo, tinfo = self._get_anchor_and_tag_info()
+        for index, i in enumerate(ainfo.copy()):
+            if client_id_get_no(i['client_id'])==ANCHORZ_NO:
+                #主基站
+                del ainfo[index]
+                break
+
         dist = dist_list2dict(self.tag_list[tag_id]['dist'], self.group_id)
         if tag_id != 0:
-            pos = self.tag_locate_algorithm.calc(dist, pack_client_id(self.group_id, 3, tag_id), ainfo)
+            pos = self.tag_locate_algorithm.calc(dist, pack_client_id(self.group_id, DEVICE_TYPE_TAG, tag_id), ainfo)
         else:
             pos = {'x': 0, 'y': 0, 'z': 0}
         if self.pos_callback is not None:
@@ -637,8 +744,8 @@ class uwb_zrzn(UwbModbus):
         anchor_id = str(anchor_id_n)
         if (client_id2 in cali_param) and (anchor_id in cali_param[client_id2]):
             curr_val *= cali_param[client_id2][anchor_id]
-        print('data_cali: %s %s %s', client_id2, anchor_id_n, curr_val)
-        print('输出: %s ', curr_val)
+        logger.debug('data_cali: %s %s %s', client_id2, anchor_id_n, curr_val)
+        logger.debug('输出: %s ', curr_val)
         return curr_val
 
     def _measure_read(self, pkt_has_height=1):
@@ -651,8 +758,8 @@ class uwb_zrzn(UwbModbus):
             return 0, 0
         # 只有3，4模式是主动发送，需要处理报文
         self.read_buf += self._read_data(0.1)
-        print('measure_read: ', len(self.read_buf), self.read_error_cnt, self.read_ok_cnt)
-        print('measure_read: ', self.read_error_stat)
+        #print('measure_read: ', len(self.read_buf), self.read_error_cnt, self.read_ok_cnt)
+        #print('measure_read: ', self.read_error_stat)
 
         pkt_length = 63
         if pkt_has_height == 0:

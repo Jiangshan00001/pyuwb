@@ -10,17 +10,7 @@ class Dingwei():
         self.using_kalman = 1
         self.kalman = {
             '1-3-20': KalmanFilterXYZ(),
-            '1-3-21': KalmanFilterXYZ(),
-            '1-3-22': KalmanFilterXYZ(),
-            '1-3-23': KalmanFilterXYZ(),
-            '1-3-24': KalmanFilterXYZ(),
-            '1-3-25': KalmanFilterXYZ(),
-            '1-3-1': KalmanFilterXYZ(),
-            '1-3-2': KalmanFilterXYZ(),
-            '1-3-3': KalmanFilterXYZ(),
-            '1-3-4': KalmanFilterXYZ(),
-            '1-3-5': KalmanFilterXYZ(),
-            '1-3-6': KalmanFilterXYZ(),
+
         }
 
     def triangle_pos_xy(self, point_list, has_height_diff=1):
@@ -495,9 +485,16 @@ class Dingwei():
             biaoqian_dist[bp]['pos'] = {'x': avg_x, 'y': avg_y, 'z': avg_z}
         # logger.info('位置 多个位置平均后的： %s', biaoqian_dist)
 
+
+        for i in biaoqian_dist:
+            cid = i['client_id']
+            if cid not in self.kalman:
+                self.kalman[cid]=KalmanFilterXYZ()
+
         if ((using_kalman is None) and self.using_kalman) or using_kalman:
             for i in biaoqian_dist:
                 cid = i['client_id']
+
                 i['pos']['x'] = self.kalman[cid].set_x(i['pos']['x'])
                 i['pos']['y'] = self.kalman[cid].set_y(i['pos']['y'])
                 i['pos']['z'] = self.kalman[cid].set_z(i['pos']['z'])

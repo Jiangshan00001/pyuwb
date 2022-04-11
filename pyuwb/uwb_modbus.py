@@ -13,6 +13,9 @@ import serial.tools.list_ports
 
 logger = logging.getLogger(__name__)
 
+#主基站编号，固定为0
+ANCHORZ_NO=0
+
 # old reg addr
 REG_TAG_NUM = 0x29
 REG_TAG_LIST = 0x37
@@ -89,7 +92,7 @@ class UwbModbus:
         self.count_for_payload_timer = time.time()
         self.count_for_payload_pps = 0  # packet per second
 
-        self.anchor_used_dict = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 0}  # 当前启动的基站列表，默认是6个
+        self.anchor_used_dict = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1}  # 当前启动的基站列表，默认是6个
         self.curr_used_anchor_no = [] #当前使用的基站号列表
         self.curr_used_tag_no=[] #当前使用的标签号列表
         self.set_cache_data_to_default()
@@ -100,6 +103,7 @@ class UwbModbus:
         is_ok = self.connect(port_name)
         if not is_ok:
             return False
+        time.sleep(0.1)
 
         count = self.port.inWaiting()
         if count != 0:
@@ -393,8 +397,8 @@ class UwbModbus:
         :param dat:
         :return:
         """
-        # logger.debug('write_modbus: %s %s %s %d', add2.to_bytes(2, 'big').hex(), reg_count.to_bytes(1, 'big').hex(),
-        #             dat.hex(), id)
+        logger.debug('write_modbus: %s %s %s %d', add2.to_bytes(2, 'big').hex(), reg_count.to_bytes(1, 'big').hex(),
+                    dat.hex(), id)
 
         if self.bulk_mode and (not just_gen_pkt):
             # logger.debug('write in bulk mode. just write to local without return data')
@@ -409,6 +413,14 @@ class UwbModbus:
     def bulk_send(self):
         # logger.debug('bulk_send')
         self._write_modbus_real(0, len(self.mbus_register) // 2, self.mbus_register)
+
+
+    def read_label_h(self):
+        is_ok, ret, bdata = self.read_modbus_h(REG_TAG_NUM, 51)
+        if is_ok:
+            label_num = ret[0]
+            return is_ok, ret[1:label_num+1]
+        return is_ok, ret
 
     def set_label_h(self, label_no_list=(0,)):
         """
@@ -435,6 +447,9 @@ class UwbModbus:
         if not self.bulk_mode:
             time.sleep(0.5)
 
+    def read_label_num_h(self):
+        is_ok, data, bdata = self.read_modbus_h(REG_TAG_NUM, 1)
+        return is_ok, data
     def set_label_num_h(self, num: int):
         # logger.info('设置标签数：%d', num)
         num_b = num.to_bytes(2, 'big')
@@ -453,6 +468,10 @@ class UwbModbus:
 
     def set_modbus_id_h(self, id=1):
         self.write_modbus_h(REG_MODBUS_ID, 1, id.to_bytes(2, 'big'))
+
+    def read_modbus_id_h(self):
+        is_ok, ret, bdata = self.read_modbus_h(REG_MODBUS_ID,1, 0xff)
+        return is_ok, ret
 
     def set_device_measure_mode_h(self, cmode=1, dmode=0):
         """
@@ -512,7 +531,9 @@ class UwbModbus:
 
         return is_ok, ilist[0]
 
-
+    def read_comm_channel_and_speed_h(self):
+        is_ok, ret, bdata = self.read_modbus_h(REG_CHANNEL_DATARAT, 1)
+        return is_ok, ret
     def set_comm_channel_and_speed_h(self, channel=1, speed=2):
         """
         byte0-空中信道，byte1-空中传输速率
@@ -541,7 +562,26 @@ class UwbModbus:
         """
         return self.write_modbus_h(REG_ANT_DLY, 1, delay.to_bytes(2, 'big'), just_gen_pkt=just_gen_pkt)
 
-    def set_anchor_enable_h(self, jizhan_index=0, enabled=1):
+    def read_anchor_enable_h(self):
+        is_ok , ret, bdata = self.read_modbus_h(REG_ANC_ENABLED, 1, 1)
+        ret_anchor_enabled=[]
+        if is_ok:
+            for i in range(1,7):
+                if(ret[0]&(1<<i)):
+                    ret_anchor_enabled.append(i-1)
+        return is_ok, ret_anchor_enabled
+
+    def set_anchor_enable_h(self,except_anchor_list=None):
+        enable_byte=0xff
+        for i in range(8):
+            if except_anchor_list is not None:
+                if i in except_anchor_list:
+                    enable_byte &= ~(1<<(i))
+        logger.debug('set anchor enable:%08x', enable_byte)
+        self.write_modbus_h(REG_ANC_ENABLED, 1, enable_byte.to_bytes(2, 'big'))
+
+
+    def set_anchor_enable_old_h(self, jizhan_index=0, enabled=1):
         """
         基站固定的有7个。编号为0-6. 对应 BCDEFGH
         :param jizhan_index: 基站编号 0-6
@@ -600,9 +640,9 @@ class UwbModbus:
         if  not is_ok:
             return False
         if ilist[0] != 0x03:
-            print('is_convert_complete: ', bdat.hex())
+            logger.warning('is_convert_complete: %s', bdat.hex())
             return False
-        print('is_convert_complete OK')
+        logger.debug('is_convert_complete OK')
         return True
 
     def convert_tag_to_anchor_once_h(self, client_id):
@@ -612,10 +652,14 @@ class UwbModbus:
         print('将标签 转化为 次基站: 次基站 ', client_id)
         # 将标签0改为B基站 ：  01 10 00 8d 00 02 04 00 00 00 02 A1 BB
         # 开始修改 ：  01 10 00 28 00 01 02 00 05 A1 BB
-        jizhan_id = int(client_id[-1]).to_bytes(1, 'big')
+        jizhan_id = int(client_id_get_no(client_id))
+
+        #FIXME: 此处基站id=1-8. 单片机中此处参数是0-7.所以修改-1
+        jizhan_id=jizhan_id-1
+        jizhan_id=jizhan_id.to_bytes(1, 'big')
         self.write_modbus_h(REG_CHANGE_ANC_ID, 2, jizhan_id + b'\x00\x00\x02')
         time.sleep(0.5)
-        ret = self.write_modbus_h(REG_CHANGE_FLAG, 1, b'\x00\x05')
+        ret = self.write_modbus_h(REG_CALCULATE_EN, 1, b'\x00\x05')
         time.sleep(0.5)
         return ret
 
@@ -646,10 +690,13 @@ class UwbModbus:
         #            01 10 00 28 00 01 02 00 05 00 00
         # 开始修改 ：  01 10 00 28 00 01 02 00 05 A1 BB
 
-        jizhan_id = int(client_id[-1]).to_bytes(1, 'big')
+        jizhan_id = int(client_id_get_no(client_id) )
+        #FIXME: 此处基站id=1-8. 单片机中此处参数是0-7.所以修改-1
+        jizhan_id=jizhan_id-1
+        jizhan_id = jizhan_id.to_bytes(1, 'big')
         self.write_modbus_h(REG_CHANGE_ANC_ID, 2, jizhan_id + b'\x00\x00\x01')
         time.sleep(0.2)
-        ret = self.write_modbus_h(REG_CHANGE_FLAG, 1, b'\x00\x05')
+        ret = self.write_modbus_h(REG_CALCULATE_EN, 1,b'\x00\x05')
         return ret
 
     def convert_anchor_to_tag_h(self, client_id, loop_max_cnt=5):
@@ -697,7 +744,7 @@ class UwbModbus:
         v = self.EMPTY_DIST_VAL
         self.tag_list_item_default={'dist': [v, v, v, v, v, v, v, v], 'dist_en': [0, 0, 0, 0, 0, 0, 0, 0],
                               'dist_cache': [[], [], [], [], [], [], [], []]}
-        self.tag_list = {1:copy.deepcopy(self.tag_list_item_default),
+        self.tag_list = {0:copy.deepcopy(self.tag_list_item_default),
                          }
         for i in self.curr_used_tag_no:
             self.tag_list[i] = copy.deepcopy(self.tag_list_item_default)
@@ -765,7 +812,6 @@ class UwbModbus:
         :param except_anchor_list: anchor that will be excluded. 默认的是空。
         :return:
         """
-        self.set_cache_data_to_default()
 
         self.bulk_mode = 1
         # 基站: B H :14379
@@ -776,24 +822,24 @@ class UwbModbus:
         self.set_device_mode_h()
         self.set_device_id_h()
         self.set_comm_channel_and_speed_h(2, 2)
-        self.set_kalman_h()
+        #self.set_kalman_h()
         self.set_recv_delay_h()
-        self.clear_measure1_reg()
+        #self.clear_measure1_reg()
 
         # 使能基站
         if except_anchor_list is None:
             except_anchor_list = []
         except_anchor_list.extend([i for i in self.anchor_used_dict if not self.anchor_used_dict[i]])
+
         self.curr_used_anchor_no = []
-
-
         for i in range(7):
             if except_anchor_list is not None:
                 if i in except_anchor_list:
-                    self.set_anchor_enable_h(i, 0)
                     continue
-            self.set_anchor_enable_h(i, 1)
             self.curr_used_anchor_no.append(i)
+
+        self.set_anchor_enable_h(except_anchor_list)
+
 
         #self.curr_anchor_stat = {i: {'cnt': 0, 'success': 0} for i in self.curr_used_anchor}
         self.curr_used_tag_no=copy.deepcopy(tag_no_list)
@@ -802,7 +848,11 @@ class UwbModbus:
 
         self.bulk_send()
         self.bulk_mode = 0
-        time.sleep(0.5)
+
+        # curr_used_tag_no curr_used_anchor_no updated up.
+        self.set_cache_data_to_default()
+
+        time.sleep(0.1)  # 0.5
 
     def decode_measure(self, payload63: bytes, pkt_has_height=1):
         battery_anchor = []

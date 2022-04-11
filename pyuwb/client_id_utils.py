@@ -33,7 +33,7 @@ def client_id_get_group(client_id):
     return id
 
 
-def pack_client_id(group_id=0, type_int=2, no=0):
+def pack_client_id(group_id=0, type_int=DEVICE_TYPE_ANCHOR, no=0):
     ret = str(group_id) + '-' + str(type_int) + '-' + str(no)
     return ret
 
